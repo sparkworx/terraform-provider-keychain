@@ -1,0 +1,36 @@
+# Default behavior
+* text=auto
+
+# Go source files
+*.go text eol=lf diff=golang
+
+# Scripts
+*.sh text eol=lf
+Makefile text eol=lf
+
+# Config files
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.hcl text eol=lf
+*.tf text eol=lf
+
+# Documentation
+*.md text eol=lf
+*.txt text eol=lf
+LICENSE text eol=lf
+
+# Git/CI config
+.gitignore text eol=lf
+.gitattributes text eol=lf
+.editorconfig text eol=lf
+.golangci.yml text eol=lf
+.gitleaks.toml text eol=lf
+.pre-commit-config.yaml text eol=lf
+
+# Binary files
+*.p12 binary
+*.pfx binary
+*.der binary
+*.keychain-db binary

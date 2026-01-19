@@ -1,0 +1,18 @@
+[allowlist]
+description = "Allowlist for terraform-provider-keychain"
+
+# Test fixtures with fake secrets
+paths = [
+  '''testdata/.*''',
+  '''.*_test\.go''',
+]
+
+# Example placeholder patterns (not real secrets)
+regexes = [
+  '''EXAMPLE_.*''',
+  '''PLACEHOLDER_.*''',
+  '''test-secret-\d+''',
+]
+
+# Specific commits to ignore (use sparingly)
+# commits = ["abc123..."]

@@ -1,0 +1,36 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  security:
+    if: false  # Disabled - remove this line to enable
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for gitleaks
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install security tools
+        run: |
+          brew install gosec govulncheck gitleaks trivy
+
+      - name: Run gosec
+        run: gosec -exclude-dir=testdata ./...
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+      - name: Run gitleaks
+        run: gitleaks detect --source . --verbose
+
+      - name: Run trivy
+        run: trivy fs --security-checks vuln,secret,config .

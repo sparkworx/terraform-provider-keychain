@@ -1,0 +1,24 @@
+repos:
+  - repo: https://github.com/securego/gosec
+    rev: v2.18.2
+    hooks:
+      - id: gosec
+        args: ['-exclude-dir=testdata', './...']
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.55.2
+    hooks:
+      - id: golangci-lint
+
+  - repo: local
+    hooks:
+      - id: govulncheck
+        name: govulncheck
+        entry: govulncheck ./...
+        language: system
+        pass_filenames: false

@@ -1,0 +1,39 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    # Security
+    - gosec          # Security issues
+    - gocritic       # Code quality and security
+    - bodyclose      # HTTP response body not closed
+    - noctx          # HTTP requests without context
+    - exhaustive     # Enum switch completeness
+
+    # Code Quality
+    - staticcheck
+    - govet
+    - errcheck
+    - ineffassign
+    - unused
+    - misspell
+
+linters-settings:
+  gosec:
+    excludes:
+      # Customize if needed, but be conservative
+      # - G104  # Unhandled errors (covered by errcheck)
+    config:
+      global:
+        audit: true  # Enable all rules including audit rules
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - security
+      - performance
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0

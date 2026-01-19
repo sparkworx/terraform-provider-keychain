@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -71,12 +72,20 @@ func (r *GenericPasswordResource) Schema(ctx context.Context, req resource.Schem
 				Sensitive:   true,
 			},
 			"label": schema.StringAttribute{
-				Description: "A human-readable label for the item.",
+				Description: "A human-readable label for the item. If not set, macOS will use the service name.",
 				Optional:    true,
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"description": schema.StringAttribute{
 				Description: "A description of the item.",
 				Optional:    true,
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"access_group": schema.StringAttribute{
 				Description: "The keychain access group.",
@@ -130,6 +139,25 @@ func (r *GenericPasswordResource) Create(ctx context.Context, req resource.Creat
 	}
 
 	data.ID = types.StringValue(fmt.Sprintf("%s:%s", data.Service.ValueString(), data.Account.ValueString()))
+
+	// Read back the item to get any computed values (like label which macOS may auto-populate)
+	created, err := r.keychain.GetGenericPassword(data.Service.ValueString(), data.Account.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error reading created generic password",
+			fmt.Sprintf("Could not read back created generic password: %s", err),
+		)
+		return
+	}
+
+	// Set computed values from what's actually in the keychain
+	data.Label = types.StringValue(created.Label)
+	data.Description = types.StringValue(created.Description)
+
+	// Zero out the password in memory
+	for i := range created.Password {
+		created.Password[i] = 0
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -218,5 +246,18 @@ func (r *GenericPasswordResource) Delete(ctx context.Context, req resource.Delet
 }
 
 func (r *GenericPasswordResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// ID format is "service:account"
+	id := req.ID
+	parts := strings.SplitN(id, ":", 2)
+	if len(parts) != 2 {
+		resp.Diagnostics.AddError(
+			"Invalid import ID",
+			fmt.Sprintf("Expected import ID in format 'service:account', got: %s", id),
+		)
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), id)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("service"), parts[0])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("account"), parts[1])...)
 }

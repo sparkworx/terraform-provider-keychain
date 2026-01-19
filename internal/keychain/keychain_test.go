@@ -465,3 +465,70 @@ func TestCertificate_CRUD(t *testing.T) {
 		}
 	})
 }
+
+func TestKey_CRUD(t *testing.T) {
+	kc := openTestKeychain(t)
+
+	label := "test-key-crud"
+	// Simple symmetric key data (32 bytes for AES-256)
+	keyData := []byte("01234567890123456789012345678901")
+
+	// Clean up any leftover items from previous test runs
+	_ = kc.DeleteKey(label)
+
+	t.Run("create", func(t *testing.T) {
+		item := &KeyItem{
+			Label:         label,
+			KeyData:       keyData,
+			KeyClass:      KeyClassSymmetric,
+			KeyType:       KeyTypeAES,
+			KeySizeInBits: 256,
+			Extractable:   true,
+			Permanent:     true,
+		}
+
+		err := kc.AddKey(item)
+		if err != nil {
+			t.Fatalf("AddKey() failed: %v", err)
+		}
+	})
+
+	t.Run("read", func(t *testing.T) {
+		item, err := kc.GetKey(label)
+		if err != nil {
+			t.Fatalf("GetKey() failed: %v", err)
+		}
+
+		if item.Label != label {
+			t.Errorf("item.Label = %q, want %q", item.Label, label)
+		}
+		if !bytes.Equal(item.KeyData, keyData) {
+			t.Errorf("item.KeyData length = %d, want %d", len(item.KeyData), len(keyData))
+		}
+		if item.KeyClass != KeyClassSymmetric {
+			t.Errorf("item.KeyClass = %q, want %q", item.KeyClass, KeyClassSymmetric)
+		}
+		if item.KeyType != KeyTypeAES {
+			t.Errorf("item.KeyType = %q, want %q", item.KeyType, KeyTypeAES)
+		}
+		if item.KeySizeInBits != 256 {
+			t.Errorf("item.KeySizeInBits = %d, want 256", item.KeySizeInBits)
+		}
+		if !item.Extractable {
+			t.Error("item.Extractable = false, want true")
+		}
+	})
+
+	t.Run("delete", func(t *testing.T) {
+		err := kc.DeleteKey(label)
+		if err != nil {
+			t.Fatalf("DeleteKey() failed: %v", err)
+		}
+
+		// Verify deletion
+		_, err = kc.GetKey(label)
+		if !IsItemNotFound(err) {
+			t.Errorf("GetKey() after delete: got err = %v, want ErrItemNotFound", err)
+		}
+	})
+}

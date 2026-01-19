@@ -4,9 +4,16 @@ package keychain
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 const (
@@ -366,6 +373,95 @@ func TestInternetPassword_CRUD(t *testing.T) {
 		_, err = kc.GetInternetPassword(server, account, protocol, port)
 		if !IsItemNotFound(err) {
 			t.Errorf("GetInternetPassword() after delete: got err = %v, want ErrItemNotFound", err)
+		}
+	})
+}
+
+// generateTestCert creates a self-signed certificate for testing
+func generateTestCert(cn string) ([]byte, error) {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return nil, err
+	}
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName:   cn,
+			Organization: []string{"Test Organization"},
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		return nil, err
+	}
+
+	return derBytes, nil
+}
+
+func TestCertificate_CRUD(t *testing.T) {
+	kc := openTestKeychain(t)
+
+	label := "test-certificate-crud"
+
+	certDER, err := generateTestCert("test-crud.example.com")
+	if err != nil {
+		t.Fatalf("Failed to generate test certificate: %v", err)
+	}
+
+	// Clean up any leftover items from previous test runs
+	_ = kc.DeleteCertificate(label)
+
+	t.Run("create", func(t *testing.T) {
+		item := &CertificateItem{
+			Label:           label,
+			CertificateData: certDER,
+		}
+
+		err := kc.AddCertificate(item)
+		if err != nil {
+			t.Fatalf("AddCertificate() failed: %v", err)
+		}
+	})
+
+	t.Run("read", func(t *testing.T) {
+		item, err := kc.GetCertificate(label)
+		if err != nil {
+			t.Fatalf("GetCertificate() failed: %v", err)
+		}
+
+		if item.Label != label {
+			t.Errorf("item.Label = %q, want %q", item.Label, label)
+		}
+		if !bytes.Equal(item.CertificateData, certDER) {
+			t.Errorf("item.CertificateData length = %d, want %d", len(item.CertificateData), len(certDER))
+		}
+		if item.Subject == "" {
+			t.Error("item.Subject is empty, expected non-empty")
+		}
+	})
+
+	t.Run("delete", func(t *testing.T) {
+		err := kc.DeleteCertificate(label)
+		if err != nil {
+			t.Fatalf("DeleteCertificate() failed: %v", err)
+		}
+
+		// Verify deletion
+		_, err = kc.GetCertificate(label)
+		if !IsItemNotFound(err) {
+			t.Errorf("GetCertificate() after delete: got err = %v, want ErrItemNotFound", err)
 		}
 	})
 }

@@ -103,6 +103,7 @@ func (p *KeychainProvider) Resources(ctx context.Context) []func() resource.Reso
 	return []func() resource.Resource{
 		resources.NewGenericPasswordResource,
 		resources.NewInternetPasswordResource,
+		resources.NewCertificateResource,
 	}
 }
 
@@ -110,5 +111,6 @@ func (p *KeychainProvider) DataSources(ctx context.Context) []func() datasource.
 	return []func() datasource.DataSource{
 		datasources.NewGenericPasswordDataSource,
 		datasources.NewInternetPasswordDataSource,
+		datasources.NewCertificateDataSource,
 	}
 }

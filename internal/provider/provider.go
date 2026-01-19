@@ -102,11 +102,13 @@ func (p *KeychainProvider) Configure(ctx context.Context, req provider.Configure
 func (p *KeychainProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		resources.NewGenericPasswordResource,
+		resources.NewInternetPasswordResource,
 	}
 }
 
 func (p *KeychainProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		datasources.NewGenericPasswordDataSource,
+		datasources.NewInternetPasswordDataSource,
 	}
 }

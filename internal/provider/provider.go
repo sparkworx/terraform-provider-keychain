@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/sparkworx/terraform-provider-keychain/internal/datasources"
 	"github.com/sparkworx/terraform-provider-keychain/internal/keychain"
 	"github.com/sparkworx/terraform-provider-keychain/internal/resources"
 )
@@ -106,6 +107,6 @@ func (p *KeychainProvider) Resources(ctx context.Context) []func() resource.Reso
 
 func (p *KeychainProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		// TODO: Add datasources
+		datasources.NewGenericPasswordDataSource,
 	}
 }

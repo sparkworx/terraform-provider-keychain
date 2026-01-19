@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"software.sslmate.com/src/go-pkcs12"
 )
 
 const (
@@ -531,4 +533,113 @@ func TestKey_CRUD(t *testing.T) {
 			t.Errorf("GetKey() after delete: got err = %v, want ErrItemNotFound", err)
 		}
 	})
+}
+
+func TestIdentity_CRUD(t *testing.T) {
+	kc := openTestKeychain(t)
+
+	label := "test-identity-crud"
+
+	// Generate a test identity (certificate + private key as PKCS#12)
+	p12Data, err := generateTestP12(label + ".example.com")
+	if err != nil {
+		t.Fatalf("Failed to generate test P12: %v", err)
+	}
+	p12Password := "test123"
+
+	// Clean up any leftover items from previous test runs
+	_ = kc.DeleteIdentity(label)
+
+	t.Run("create", func(t *testing.T) {
+		item := &IdentityItem{
+			Label:      label,
+			PKCS12Data: p12Data,
+		}
+
+		err := kc.AddIdentity(item, p12Password)
+		if err != nil {
+			t.Fatalf("AddIdentity() failed: %v", err)
+		}
+	})
+
+	t.Run("read", func(t *testing.T) {
+		item, err := kc.GetIdentity(label)
+		if err != nil {
+			t.Fatalf("GetIdentity() failed: %v", err)
+		}
+
+		if item.Label != label {
+			t.Errorf("item.Label = %q, want %q", item.Label, label)
+		}
+		if len(item.CertificateData) == 0 {
+			t.Error("item.CertificateData is empty")
+		}
+		if item.Subject == "" {
+			t.Error("item.Subject is empty")
+		}
+		// Key type should be EC since we use ECDSA
+		if item.KeyType != KeyTypeEC {
+			t.Errorf("item.KeyType = %q, want %q", item.KeyType, KeyTypeEC)
+		}
+		if item.KeySizeInBits != 256 {
+			t.Errorf("item.KeySizeInBits = %d, want 256", item.KeySizeInBits)
+		}
+	})
+
+	t.Run("delete", func(t *testing.T) {
+		err := kc.DeleteIdentity(label)
+		if err != nil {
+			t.Fatalf("DeleteIdentity() failed: %v", err)
+		}
+
+		// Verify deletion
+		_, err = kc.GetIdentity(label)
+		if !IsItemNotFound(err) {
+			t.Errorf("GetIdentity() after delete: got err = %v, want ErrItemNotFound", err)
+		}
+	})
+}
+
+// generateTestP12 creates a self-signed certificate with private key as PKCS#12
+func generateTestP12(cn string) ([]byte, error) {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return nil, err
+	}
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName:   cn,
+			Organization: []string{"Test Organization"},
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		return nil, err
+	}
+
+	cert, err := x509.ParseCertificate(derBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	// Encode as PKCS#12 using legacy encoding for macOS compatibility
+	pfxData, err := pkcs12.Legacy.Encode(priv, cert, nil, "test123")
+	if err != nil {
+		return nil, err
+	}
+
+	return pfxData, nil
 }

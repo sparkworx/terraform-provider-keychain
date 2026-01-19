@@ -1228,6 +1228,306 @@ static OSStatus deleteKey(
     return deleteStatus;
 }
 
+// Import a PKCS#12 identity into the keychain using SecItemImport
+static OSStatus addIdentity(
+    SecKeychainRef keychain,
+    const void *p12Data,
+    size_t p12DataLen,
+    const char *password,
+    const char *label
+) {
+    CFDataRef cfP12Data = CFDataCreate(kCFAllocatorDefault, (const UInt8 *)p12Data, (CFIndex)p12DataLen);
+    if (cfP12Data == NULL) {
+        return errSecParam;
+    }
+
+    // Set up import parameters
+    SecItemImportExportKeyParameters keyParams;
+    memset(&keyParams, 0, sizeof(keyParams));
+    keyParams.version = SEC_KEY_IMPORT_EXPORT_PARAMS_VERSION;
+
+    CFStringRef cfPassword = createCFString(password);
+    keyParams.passphrase = cfPassword;
+    // keyAttributes is set to NULL - defaults will be used (extractable, permanent when keychain is specified)
+
+    SecExternalFormat inputFormat = kSecFormatPKCS12;
+    SecExternalItemType itemType = kSecItemTypeAggregate;
+
+    CFArrayRef outItems = NULL;
+    OSStatus status = SecItemImport(
+        cfP12Data,
+        NULL,  // filename extension
+        &inputFormat,
+        &itemType,
+        0,     // flags
+        &keyParams,
+        keychain,
+        &outItems
+    );
+
+    if (cfPassword) CFRelease(cfPassword);
+    CFRelease(cfP12Data);
+
+    if (status != errSecSuccess) {
+        if (outItems) CFRelease(outItems);
+        return status;
+    }
+
+    // Find the identity in the imported items and update its label
+    if (outItems != NULL && label != NULL && label[0] != '\0') {
+        CFIndex count = CFArrayGetCount(outItems);
+        for (CFIndex i = 0; i < count; i++) {
+            CFTypeRef item = CFArrayGetValueAtIndex(outItems, i);
+            CFTypeID typeID = CFGetTypeID(item);
+
+            // Check if this is an identity
+            if (typeID == SecIdentityGetTypeID()) {
+                SecIdentityRef identity = (SecIdentityRef)item;
+
+                // Get the certificate to update its label
+                SecCertificateRef cert = NULL;
+                if (SecIdentityCopyCertificate(identity, &cert) == errSecSuccess && cert != NULL) {
+                    CFMutableDictionaryRef query = CFDictionaryCreateMutable(
+                        kCFAllocatorDefault, 0,
+                        &kCFTypeDictionaryKeyCallBacks,
+                        &kCFTypeDictionaryValueCallBacks
+                    );
+                    CFDictionarySetValue(query, kSecClass, kSecClassCertificate);
+                    CFDictionarySetValue(query, kSecValueRef, cert);
+
+                    if (keychain != NULL) {
+                        CFArrayRef keychains = CFArrayCreate(kCFAllocatorDefault, (const void **)&keychain, 1, &kCFTypeArrayCallBacks);
+                        CFDictionarySetValue(query, kSecMatchSearchList, keychains);
+                        CFRelease(keychains);
+                    }
+
+                    CFMutableDictionaryRef updateAttrs = CFDictionaryCreateMutable(
+                        kCFAllocatorDefault, 0,
+                        &kCFTypeDictionaryKeyCallBacks,
+                        &kCFTypeDictionaryValueCallBacks
+                    );
+
+                    CFStringRef cfLabel = createCFString(label);
+                    if (cfLabel) {
+                        CFDictionarySetValue(updateAttrs, kSecAttrLabel, cfLabel);
+                        SecItemUpdate(query, updateAttrs);
+                        CFRelease(cfLabel);
+                    }
+
+                    CFRelease(updateAttrs);
+                    CFRelease(query);
+                    CFRelease(cert);
+                }
+                break;
+            }
+        }
+        CFRelease(outItems);
+    } else if (outItems != NULL) {
+        CFRelease(outItems);
+    }
+
+    return errSecSuccess;
+}
+
+// Get an identity from the keychain by label
+static OSStatus getIdentity(
+    SecKeychainRef keychain,
+    const char *label,
+    void **certData,
+    size_t *certDataLen,
+    char **outSubject,
+    char **outIssuer,
+    char **outKeyType,
+    int *outKeySizeInBits
+) {
+    // Initialize outputs
+    *certData = NULL;
+    *certDataLen = 0;
+    if (outSubject) *outSubject = NULL;
+    if (outIssuer) *outIssuer = NULL;
+    if (outKeyType) *outKeyType = NULL;
+    if (outKeySizeInBits) *outKeySizeInBits = 0;
+
+    CFMutableDictionaryRef query = CFDictionaryCreateMutable(
+        kCFAllocatorDefault, 0,
+        &kCFTypeDictionaryKeyCallBacks,
+        &kCFTypeDictionaryValueCallBacks
+    );
+
+    CFDictionarySetValue(query, kSecClass, kSecClassIdentity);
+    CFDictionarySetValue(query, kSecReturnRef, kCFBooleanTrue);
+    CFDictionarySetValue(query, kSecMatchLimit, kSecMatchLimitOne);
+
+    if (keychain != NULL) {
+        CFArrayRef keychains = CFArrayCreate(kCFAllocatorDefault, (const void **)&keychain, 1, &kCFTypeArrayCallBacks);
+        CFDictionarySetValue(query, kSecMatchSearchList, keychains);
+        CFRelease(keychains);
+    }
+
+    CFStringRef cfLabel = createCFString(label);
+    if (cfLabel) {
+        CFDictionarySetValue(query, kSecAttrLabel, cfLabel);
+    }
+
+    SecIdentityRef identity = NULL;
+    OSStatus status = SecItemCopyMatching(query, (CFTypeRef *)&identity);
+
+    if (cfLabel) CFRelease(cfLabel);
+    CFRelease(query);
+
+    if (status != errSecSuccess || identity == NULL) {
+        return status;
+    }
+
+    // Get certificate from identity
+    SecCertificateRef cert = NULL;
+    status = SecIdentityCopyCertificate(identity, &cert);
+    if (status != errSecSuccess || cert == NULL) {
+        CFRelease(identity);
+        return status;
+    }
+
+    // Get certificate DER data
+    CFDataRef derData = SecCertificateCopyData(cert);
+    if (derData) {
+        *certDataLen = (size_t)CFDataGetLength(derData);
+        *certData = malloc(*certDataLen);
+        if (*certData) {
+            memcpy(*certData, CFDataGetBytePtr(derData), *certDataLen);
+        }
+        CFRelease(derData);
+    }
+
+    // Get subject summary
+    if (outSubject) {
+        CFStringRef subjectSummary = SecCertificateCopySubjectSummary(cert);
+        if (subjectSummary) {
+            *outSubject = cfStringToCString(subjectSummary);
+            CFRelease(subjectSummary);
+        }
+    }
+
+    CFRelease(cert);
+
+    // Get private key from identity
+    SecKeyRef privateKey = NULL;
+    status = SecIdentityCopyPrivateKey(identity, &privateKey);
+    if (status == errSecSuccess && privateKey != NULL) {
+        // Get key attributes
+        CFDictionaryRef keyAttrs = SecKeyCopyAttributes(privateKey);
+        if (keyAttrs) {
+            // Get key type
+            CFTypeRef keyTypeRef = CFDictionaryGetValue(keyAttrs, kSecAttrKeyType);
+            if (keyTypeRef && outKeyType) {
+                *outKeyType = cfTypeToKeyType(keyTypeRef);
+            }
+
+            // Get key size
+            CFNumberRef keySizeRef = (CFNumberRef)CFDictionaryGetValue(keyAttrs, kSecAttrKeySizeInBits);
+            if (keySizeRef && outKeySizeInBits) {
+                CFNumberGetValue(keySizeRef, kCFNumberIntType, outKeySizeInBits);
+            }
+
+            CFRelease(keyAttrs);
+        }
+        CFRelease(privateKey);
+    }
+
+    CFRelease(identity);
+    return errSecSuccess;
+}
+
+// Delete an identity from the keychain by label
+static OSStatus deleteIdentity(
+    SecKeychainRef keychain,
+    const char *label
+) {
+    // First, find the identity
+    CFMutableDictionaryRef query = CFDictionaryCreateMutable(
+        kCFAllocatorDefault, 0,
+        &kCFTypeDictionaryKeyCallBacks,
+        &kCFTypeDictionaryValueCallBacks
+    );
+
+    CFDictionarySetValue(query, kSecClass, kSecClassIdentity);
+    CFDictionarySetValue(query, kSecReturnRef, kCFBooleanTrue);
+    CFDictionarySetValue(query, kSecMatchLimit, kSecMatchLimitOne);
+
+    if (keychain != NULL) {
+        CFArrayRef keychains = CFArrayCreate(kCFAllocatorDefault, (const void **)&keychain, 1, &kCFTypeArrayCallBacks);
+        CFDictionarySetValue(query, kSecMatchSearchList, keychains);
+        CFRelease(keychains);
+    }
+
+    CFStringRef cfLabel = createCFString(label);
+    if (cfLabel) {
+        CFDictionarySetValue(query, kSecAttrLabel, cfLabel);
+    }
+
+    SecIdentityRef identity = NULL;
+    OSStatus status = SecItemCopyMatching(query, (CFTypeRef *)&identity);
+
+    if (cfLabel) CFRelease(cfLabel);
+    CFRelease(query);
+
+    if (status != errSecSuccess || identity == NULL) {
+        return status;
+    }
+
+    // Get the certificate and private key to delete them
+    SecCertificateRef cert = NULL;
+    SecIdentityCopyCertificate(identity, &cert);
+
+    SecKeyRef privateKey = NULL;
+    SecIdentityCopyPrivateKey(identity, &privateKey);
+
+    CFRelease(identity);
+
+    // Delete the certificate
+    if (cert != NULL) {
+        CFMutableDictionaryRef certQuery = CFDictionaryCreateMutable(
+            kCFAllocatorDefault, 0,
+            &kCFTypeDictionaryKeyCallBacks,
+            &kCFTypeDictionaryValueCallBacks
+        );
+        CFDictionarySetValue(certQuery, kSecClass, kSecClassCertificate);
+        CFDictionarySetValue(certQuery, kSecValueRef, cert);
+
+        if (keychain != NULL) {
+            CFArrayRef keychains = CFArrayCreate(kCFAllocatorDefault, (const void **)&keychain, 1, &kCFTypeArrayCallBacks);
+            CFDictionarySetValue(certQuery, kSecMatchSearchList, keychains);
+            CFRelease(keychains);
+        }
+
+        SecItemDelete(certQuery);
+        CFRelease(certQuery);
+        CFRelease(cert);
+    }
+
+    // Delete the private key
+    if (privateKey != NULL) {
+        CFMutableDictionaryRef keyQuery = CFDictionaryCreateMutable(
+            kCFAllocatorDefault, 0,
+            &kCFTypeDictionaryKeyCallBacks,
+            &kCFTypeDictionaryValueCallBacks
+        );
+        CFDictionarySetValue(keyQuery, kSecClass, kSecClassKey);
+        CFDictionarySetValue(keyQuery, kSecValueRef, privateKey);
+
+        if (keychain != NULL) {
+            CFArrayRef keychains = CFArrayCreate(kCFAllocatorDefault, (const void **)&keychain, 1, &kCFTypeArrayCallBacks);
+            CFDictionarySetValue(keyQuery, kSecMatchSearchList, keychains);
+            CFRelease(keychains);
+        }
+
+        SecItemDelete(keyQuery);
+        CFRelease(keyQuery);
+        CFRelease(privateKey);
+    }
+
+    return errSecSuccess;
+}
+
 */
 import "C"
 import (
@@ -1870,16 +2170,96 @@ func stringToKeyType(s string) KeyType {
 }
 
 func (k *Keychain) addIdentity(item *IdentityItem, password string) error {
-	// TODO: Implement identity addition (PKCS#12 import)
-	return ErrUnknown
+	if len(item.PKCS12Data) == 0 {
+		return ErrInvalidParameter
+	}
+
+	var cPassword *C.char
+	if password != "" {
+		cPassword = C.CString(password)
+		defer C.free(unsafe.Pointer(cPassword))
+	}
+
+	var cLabel *C.char
+	if item.Label != "" {
+		cLabel = C.CString(item.Label)
+		defer C.free(unsafe.Pointer(cLabel))
+	}
+
+	status := C.addIdentity(
+		C.SecKeychainRef(k.handle),
+		unsafe.Pointer(&item.PKCS12Data[0]),
+		C.size_t(len(item.PKCS12Data)),
+		cPassword,
+		cLabel,
+	)
+	if status != C.errSecSuccess {
+		return newError(int32(status))
+	}
+	return nil
 }
 
 func (k *Keychain) getIdentity(label string) (*IdentityItem, error) {
-	// TODO: Implement identity retrieval
-	return nil, ErrUnknown
+	cLabel := C.CString(label)
+	defer C.free(unsafe.Pointer(cLabel))
+
+	var certData unsafe.Pointer
+	var certDataLen C.size_t
+	var cSubject, cIssuer, cKeyType *C.char
+	var keySizeInBits C.int
+
+	status := C.getIdentity(
+		C.SecKeychainRef(k.handle),
+		cLabel,
+		&certData,
+		&certDataLen,
+		&cSubject,
+		&cIssuer,
+		&cKeyType,
+		&keySizeInBits,
+	)
+	if status != C.errSecSuccess {
+		return nil, newError(int32(status))
+	}
+
+	item := &IdentityItem{
+		Label:         label,
+		KeySizeInBits: int(keySizeInBits),
+	}
+
+	if certData != nil && certDataLen > 0 {
+		item.CertificateData = C.GoBytes(certData, C.int(certDataLen))
+		C.free(certData)
+	}
+
+	if cSubject != nil {
+		item.Subject = C.GoString(cSubject)
+		C.free(unsafe.Pointer(cSubject))
+	}
+
+	if cIssuer != nil {
+		item.Issuer = C.GoString(cIssuer)
+		C.free(unsafe.Pointer(cIssuer))
+	}
+
+	if cKeyType != nil {
+		item.KeyType = stringToKeyType(C.GoString(cKeyType))
+		C.free(unsafe.Pointer(cKeyType))
+	}
+
+	return item, nil
 }
 
 func (k *Keychain) deleteIdentity(label string) error {
-	// TODO: Implement identity deletion
-	return ErrUnknown
+	cLabel := C.CString(label)
+	defer C.free(unsafe.Pointer(cLabel))
+
+	status := C.deleteIdentity(
+		C.SecKeychainRef(k.handle),
+		cLabel,
+	)
+	if status != C.errSecSuccess {
+		return newError(int32(status))
+	}
+	return nil
 }

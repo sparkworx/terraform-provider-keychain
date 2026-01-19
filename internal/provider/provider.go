@@ -105,6 +105,7 @@ func (p *KeychainProvider) Resources(ctx context.Context) []func() resource.Reso
 		resources.NewInternetPasswordResource,
 		resources.NewCertificateResource,
 		resources.NewKeyResource,
+		resources.NewIdentityResource,
 	}
 }
 
@@ -114,5 +115,6 @@ func (p *KeychainProvider) DataSources(ctx context.Context) []func() datasource.
 		datasources.NewInternetPasswordDataSource,
 		datasources.NewCertificateDataSource,
 		datasources.NewKeyDataSource,
+		datasources.NewIdentityDataSource,
 	}
 }

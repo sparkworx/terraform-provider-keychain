@@ -1,7 +1,7 @@
 VERSION ?= 0.1.0
 BINARY_NAME = terraform-provider-keychain
 
-.PHONY: deps build-all build-arm64 build-amd64 install clean lint test test-acc security gosec govulncheck gitleaks trivy check
+.PHONY: deps build-all build-arm64 build-amd64 install clean lint test test-acc security gosec govulncheck gitleaks trivy check generate docs
 
 # Install dependencies via Homebrew
 deps:
@@ -27,6 +27,11 @@ install: build-all
 
 lint:
 	golangci-lint run
+
+generate: docs
+
+docs:
+	go generate ./...
 
 test:
 	go test ./...

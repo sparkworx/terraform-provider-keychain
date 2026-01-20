@@ -1,13 +1,15 @@
 VERSION ?= 0.1.0
 BINARY_NAME = terraform-provider-keychain
 
-.PHONY: deps build-all build-arm64 build-amd64 install clean lint test test-acc security gosec govulncheck gitleaks trivy check generate docs
+.PHONY: deps build-all build-arm64 build-amd64 install clean lint test test-acc security gosec govulncheck gitleaks trivy check generate docs docs-serve docs-build
 
 # Install dependencies via Homebrew
 deps:
 	brew bundle --file Brewfile
 	@echo "Verifying Xcode Command Line Tools..."
 	@xcode-select -p > /dev/null 2>&1 || (echo "Run: xcode-select --install" && exit 1)
+	@echo "Installing mkdocs-material theme..."
+	@pipx install mkdocs-material --include-deps 2>/dev/null || pipx upgrade mkdocs-material 2>/dev/null || true
 
 build-all: build-arm64 build-amd64
 
@@ -32,6 +34,12 @@ generate: docs
 
 docs:
 	go generate ./...
+
+docs-serve: docs
+	@command -v ~/.local/bin/mkdocs >/dev/null 2>&1 && ~/.local/bin/mkdocs serve || mkdocs serve
+
+docs-build: docs
+	@command -v ~/.local/bin/mkdocs >/dev/null 2>&1 && ~/.local/bin/mkdocs build || mkdocs build
 
 test:
 	go test ./...

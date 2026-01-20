@@ -18,6 +18,9 @@ brew "trivy"                 # Comprehensive vulnerability scanner (deps, secret
 brew "goreleaser"            # Automates release builds and checksums
 brew "jq"                    # JSON processing for scripts
 brew "pre-commit"            # Git hooks for code quality and security checks
+brew "pipx"                  # For installing mkdocs-material theme
+
+# After brew bundle, run: pipx install mkdocs-material --include-deps
 
 # Xcode Command Line Tools (required for cgo cross-compilation)
 # Install separately with: xcode-select --install

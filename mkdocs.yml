@@ -1,0 +1,38 @@
+site_name: Terraform Provider Keychain
+site_description: Terraform provider for managing items in macOS Keychains
+repo_url: https://github.com/sparkworx/terraform-provider-keychain
+
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    primary: purple
+    accent: purple
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Resources:
+      - keychain_generic_password: resources/generic_password.md
+      - keychain_internet_password: resources/internet_password.md
+      - keychain_certificate: resources/certificate.md
+      - keychain_key: resources/key.md
+      - keychain_identity: resources/identity.md
+  - Data Sources:
+      - keychain_generic_password: data-sources/generic_password.md
+      - keychain_internet_password: data-sources/internet_password.md
+      - keychain_certificate: data-sources/certificate.md
+      - keychain_key: data-sources/key.md
+      - keychain_identity: data-sources/identity.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - admonition
+  - toc:
+      permalink: true

@@ -2,7 +2,7 @@ package datasources
 
 import (
 	"context"
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- SHA1 used for standard certificate fingerprinting, not security
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
@@ -145,7 +145,7 @@ func (d *CertificateDataSource) Read(ctx context.Context, req datasource.ReadReq
 	data.NotAfter = types.StringValue(cert.NotAfter.UTC().Format("2006-01-02T15:04:05Z"))
 
 	// Compute fingerprints
-	sha1Sum := sha1.Sum(item.CertificateData)
+	sha1Sum := sha1.Sum(item.CertificateData) // #nosec G401 -- SHA1 used for standard certificate fingerprinting
 	sha256Sum := sha256.Sum256(item.CertificateData)
 	data.FingerprintSHA1 = types.StringValue(hex.EncodeToString(sha1Sum[:]))
 	data.FingerprintSHA256 = types.StringValue(hex.EncodeToString(sha256Sum[:]))

@@ -2,7 +2,7 @@ package resources
 
 import (
 	"context"
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- SHA1 used for standard certificate fingerprinting, not security
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
@@ -149,7 +149,7 @@ func parseCertificate(certData string) ([]byte, *x509.Certificate, error) {
 
 // computeFingerprints computes SHA1 and SHA256 fingerprints of DER data
 func computeFingerprints(derBytes []byte) (sha1Hex, sha256Hex string) {
-	sha1Sum := sha1.Sum(derBytes)
+	sha1Sum := sha1.Sum(derBytes) // #nosec G401 -- SHA1 used for standard certificate fingerprinting
 	sha256Sum := sha256.Sum256(derBytes)
 	return hex.EncodeToString(sha1Sum[:]), hex.EncodeToString(sha256Sum[:])
 }

@@ -41,7 +41,7 @@ security: gosec govulncheck gitleaks trivy
 
 gosec:
 	@echo "🔍 Running gosec (Go security checker)..."
-	gosec -exclude-dir=testdata -fmt=text ./...
+	gosec -exclude-dir=testdata -exclude-generated -fmt=text ./...
 
 govulncheck:
 	@echo "🔍 Running govulncheck (dependency vulnerabilities)..."

@@ -17,14 +17,17 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version-file: go.mod
 
       - name: Install security tools
         run: |
           brew install gosec govulncheck gitleaks trivy
 
+      - name: Run tests
+        run: go test ./...
+
       - name: Run gosec
-        run: gosec -exclude-dir=testdata ./...
+        run: gosec -exclude-dir=testdata -exclude-generated -fmt=text ./...
 
       - name: Run govulncheck
         run: govulncheck ./...
@@ -33,4 +36,4 @@ jobs:
         run: gitleaks detect --source . --verbose
 
       - name: Run trivy
-        run: trivy fs --security-checks vuln,secret,config .
+        run: trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL .

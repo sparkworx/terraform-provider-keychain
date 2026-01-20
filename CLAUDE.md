@@ -802,7 +802,7 @@ require (
 - [x] Certificate resource/datasource
 - [x] Key resource/datasource
 - [x] Identity resource/datasource
-- [ ] Documentation generation
+- [x] Documentation generation
 - [x] Acceptance test suite
 - [x] CI/CD pipeline documented (GitHub Actions - macOS runners, cross-arch builds)
 - [x] Security scanning documented (gosec, govulncheck, gitleaks, trivy)

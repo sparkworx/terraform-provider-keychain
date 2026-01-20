@@ -801,7 +801,7 @@ require (
 - [x] Internet password resource/datasource
 - [x] Certificate resource/datasource
 - [x] Key resource/datasource
-- [ ] Identity resource/datasource
+- [x] Identity resource/datasource
 - [ ] Documentation generation
 - [x] Acceptance test suite
 - [x] CI/CD pipeline documented (GitHub Actions - macOS runners, cross-arch builds)

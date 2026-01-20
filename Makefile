@@ -32,6 +32,7 @@ test:
 	go test ./...
 
 test-acc:
+	go clean -testcache
 	TF_ACC=1 go test ./... -v
 
 # Security scanning targets

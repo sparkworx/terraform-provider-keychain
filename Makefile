@@ -5,7 +5,7 @@ BINARY_NAME = terraform-provider-keychain
 
 # Install dependencies via Homebrew
 deps:
-	brew bundle
+	brew bundle --file Brewfile
 	@echo "Verifying Xcode Command Line Tools..."
 	@xcode-select -p > /dev/null 2>&1 || (echo "Run: xcode-select --install" && exit 1)
 
